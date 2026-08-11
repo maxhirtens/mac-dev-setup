@@ -14,12 +14,12 @@ Start-to-finish setup for a fresh macOS machine: prep, system config, CLIs, edit
 2. [Erase and reinstall](#2-erase-and-reinstall)
 3. [First boot](#3-first-boot)
 4. [Manual installs](#4-manual-installs)
-5. [Machine name](#5-machine-name)
-6. [macOS defaults](#6-macos-defaults)
-7. [Homebrew and CLIs](#7-homebrew-and-clis)
-8. [Node via fnm](#8-node-via-fnm)
-9. [GitHub auth](#9-github-auth)
-10. [Claude Code](#10-claude-code)
+5. [Claude Code](#5-claude-code)
+6. [Machine name](#6-machine-name)
+7. [macOS defaults](#7-macos-defaults)
+8. [Homebrew and CLIs](#8-homebrew-and-clis)
+9. [Node via fnm](#9-node-via-fnm)
+10. [GitHub auth](#10-github-auth)
 11. [GUI apps (casks)](#11-gui-apps-casks)
 12. [Cursor / VS Code](#12-cursor--vs-code)
 13. [System Settings](#13-system-settings)
@@ -64,7 +64,30 @@ Install in this order — Chrome and 1Password first, so everything after can be
 - [ ] Sign into Google account
 - [ ] Sign into iCloud — confirm no duplicate contact card was created
 
-## 5. Machine name
+## 5. Claude Code
+
+Install this early — it's a plain `curl`, with no dependency on Homebrew or Node — so Claude can help run the rest of this doc.
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+claude
+```
+
+Run `claude` once to log in via the browser. Then point it at this doc:
+
+```
+Walk me through https://github.com/maxhirtens/mac-dev-setup
+```
+
+Claude can run the `defaults`, Homebrew, fnm, and skills steps directly. It can't type a `sudo` password or complete a browser login — run those yourself with the `!` prefix so the output stays in the session.
+
+Config restore:
+
+- Global `CLAUDE.md` and `settings.json` — restore from the saved copies
+- `CLAUDE.md` for projects lives in each repo directly
+- Skills need `npx`, so they come after Node — see [Appendix A](#appendix-a-claude-skills)
+
+## 6. Machine name
 
 ```bash
 sudo scutil --set ComputerName "mbp1" &&
@@ -81,7 +104,7 @@ scutil --get LocalHostName &&
 scutil --get HostName
 ```
 
-## 6. macOS defaults
+## 7. macOS defaults
 
 ```bash
 defaults write com.apple.screencapture type jpg &&
@@ -94,7 +117,7 @@ chflags nohidden ~/Library
 
 Screenshots as JPG · text selection in Quick Look · no `.DS_Store` on network or USB volumes · no Time Machine prompts for new disks · `~/Library` visible.
 
-## 7. Homebrew and CLIs
+## 8. Homebrew and CLIs
 
 Homebrew installs the Xcode Command Line Tools as part of its own install — no separate step.
 
@@ -103,7 +126,7 @@ Homebrew installs the Xcode Command Line Tools as part of its own install — no
 brew update
 ```
 
-All CLIs in one shot — Node is intentionally excluded, `fnm` owns it ([step 8](#8-node-via-fnm)):
+All CLIs in one shot — Node is intentionally excluded, `fnm` owns it ([step 9](#9-node-via-fnm)):
 
 ```bash
 brew install git gh stripe/stripe-cli/stripe
@@ -119,7 +142,7 @@ git config --global init.defaultBranch main &&
 git config --global --list
 ```
 
-## 8. Node via fnm
+## 9. Node via fnm
 
 Installs `fnm`, Node 24 (the Vercel prod runtime), sets it as the global default, and wires up auto-switching so any repo with a `.nvmrc` or `.node-version` picks up its version on `cd`. Idempotent — safe to re-run.
 
@@ -138,7 +161,7 @@ Restart the terminal (or `source ~/.zshrc`), then verify — expect `v24.x`:
 node -v && npm -v
 ```
 
-## 9. GitHub auth
+## 10. GitHub auth
 
 ```bash
 gh auth login
@@ -146,19 +169,7 @@ gh auth login
 
 Choose **HTTPS** when prompted.
 
-## 10. Claude Code
-
-```bash
-curl -fsSL https://claude.ai/install.sh | bash
-claude
-```
-
-Run `claude` once to log in, then restore config:
-
-- Install skills from [Appendix A](#appendix-a-claude-skills)
-- Custom skills: the `Code/` repo is the source of truth — symlink into the skills dir, never copy
-- `CLAUDE.md` lives in each repo directly
-- Restore global `CLAUDE.md` and `settings.json` from the saved copies
+Node and `gh` are both in place now — this is the point to come back and install skills from [Appendix A](#appendix-a-claude-skills).
 
 ## 11. GUI apps (casks)
 
