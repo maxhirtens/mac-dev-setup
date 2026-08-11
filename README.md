@@ -329,10 +329,6 @@ npx skills add vercel-labs/skills \
 npx skills add neondatabase/agent-skills \
   --skill neon-postgres \
   -g -a claude-code -y
-
-npx skills add mattpocock/skills \
-  --skill grill-me \
-  -g -a claude-code -y
 ```
 
 ### Custom skills
