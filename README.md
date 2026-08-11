@@ -246,7 +246,13 @@ Cursor is primary; VS Code is optional.
 
 ```bash
 mkdir -p ~/Desktop/Code && cd ~/Desktop/Code
-gh repo clone rainstorm-labs/<repo-name>
+gh repo clone <owner>/<repo>
+```
+
+List what's available to work through:
+
+```bash
+gh repo list <owner> --limit 50
 ```
 
 Add `.env` files back from 1Password.
@@ -330,7 +336,19 @@ ln -s ~/Desktop/Code/maxhirtens-skills/maxhirtens-fix-or-feature ~/.agents/skill
 ln -s ~/Desktop/Code/maxhirtens-skills/maxhirtens-ship-to-main ~/.agents/skills/
 ```
 
-Then link the same directories into the global Claude skills dir.
+Then link the same directories into the global Claude skills dir:
+
+```bash
+mkdir -p ~/.claude/skills
+ln -s ~/Desktop/Code/maxhirtens-skills/maxhirtens-fix-or-feature ~/.claude/skills/
+ln -s ~/Desktop/Code/maxhirtens-skills/maxhirtens-ship-to-main ~/.claude/skills/
+```
+
+Verify both sets of links resolve:
+
+```bash
+ls -l ~/.agents/skills ~/.claude/skills
+```
 
 ## Appendix B: Editor extensions
 
