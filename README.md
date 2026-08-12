@@ -114,10 +114,14 @@ Config restore:
 
 ## 6. Machine name
 
+One short lowercase name, unique per machine, set in all three places so Finder, Bonjour, and the shell prompt agree. Pick it by hardware — the pattern is model plus a digit.
+
 ```bash
-sudo scutil --set ComputerName "mbp1" &&
-sudo scutil --set LocalHostName "mbp1" &&
-sudo scutil --set HostName "mbp1" &&
+NAME="<machine-name>"
+
+sudo scutil --set ComputerName "$NAME" &&
+sudo scutil --set LocalHostName "$NAME" &&
+sudo scutil --set HostName "$NAME" &&
 dscacheutil -flushcache
 ```
 
@@ -212,7 +216,7 @@ node -v && npm -v
 
 Everything else that belongs in `~/.zshrc`, on top of the fnm line from [step 9](#9-node-via-fnm) — PATH de-duplication, the `~/.local/bin` entry that makes `claude` resolvable, git branch helpers, and a one-shot update command.
 
-**Install-once, not re-runnable.** The `grep` guard skips the whole block if it's already present, so this is safe to paste twice — but re-running it will *not* pick up later edits to `pull` or `up`. To update an existing machine, edit `~/.zshrc` by hand, or delete the block and re-run.
+**Install-once, not re-runnable.** The `grep` guard skips the whole block if it's already present, so this is safe to paste twice — but re-running it will *not* pick up later edits to `pull`, `plugup`, or `up`. To update an existing machine, edit `~/.zshrc` by hand, or delete the block and re-run.
 
 ```bash
 grep -qs 'typeset -U path' ~/.zshrc || cat >> ~/.zshrc <<'EOF'
@@ -271,15 +275,28 @@ pull() {
   git checkout development && git pull origin development
 }
 
+# plugup — refresh every marketplace, then update each installed plugin.
+# `claude plugin update` takes one plugin at a time and has no --all, hence the loop.
+plugup() {
+  command -v claude >/dev/null 2>&1 || { echo "plugup: claude not on PATH" >&2; return 1; }
+  claude plugin marketplace update || return 1
+  local p
+  for p in $(python3 -c 'import json,os
+f = os.path.expanduser("~/.claude/plugins/installed_plugins.json")
+print(" ".join(json.load(open(f)).get("plugins", {})) if os.path.exists(f) else "")'); do
+    claude plugin update "$p"
+  done
+}
+
 # up — update everything
-alias up='brew update && brew upgrade --greedy && brew cleanup && brew autoremove; npm update -g; npx skills update -g -y; softwareupdate -l'
+alias up='brew update && brew upgrade --greedy && brew cleanup && brew autoremove; npm update -g; npx skills update -g -y; plugup; softwareupdate -l'
 EOF
 ```
 
 Restart the terminal (or `source ~/.zshrc`), then verify:
 
 ```bash
-type pull | head -1 && alias up
+type pull | head -1 && type plugup | head -1 && alias up
 ```
 
 | Command           | Does                                                                                   |
@@ -289,7 +306,12 @@ type pull | head -1 && alias up
 | `pull main`       | `checkout main` → `pull origin main`                                                     |
 | `pull dev`        | Same, then `development` — ends on `development`                                         |
 | `pull all`        | Fetches every branch, fast-forwards all locals, creates locals for branches pushed from another machine — never switches branches |
-| `up`              | Brew update/upgrade/cleanup/autoremove, global npm, Claude skills, lists macOS updates   |
+| `plugup`          | Refreshes every Claude Code marketplace, then updates each installed plugin              |
+| `up`              | Brew update/upgrade/cleanup/autoremove, global npm, Claude skills, Claude plugins, lists macOS updates |
+
+`pull` takes no default — a bare `pull` prints usage and exits 1 rather than guessing which of the three you meant.
+
+`plugup` exists because plugin auto-update is per-marketplace and off by default for third-party ones ([Appendix A](#appendix-a-claude-skills)). Folding it into `up` makes that setting irrelevant: every marketplace and plugin is current after an `up`, whatever the toggles say. `claude plugin update` handles one plugin per call and has no `--all`, so the function reads the installed set out of `~/.claude/plugins/installed_plugins.json` and loops. Updates land on disk; a running session picks them up on `/reload-plugins` or next launch.
 
 `--greedy` is load-bearing: without it `brew upgrade` skips every `auto_updates true` cask, which is nearly all of them, and `up` reports success having upgraded no apps at all.
 
@@ -317,8 +339,12 @@ Anything with a working cask goes through brew so `up` can see it. Only apps wit
 
 ```bash
 brew install --cask vlc cursor zoom spotify superduper transmission \
-  inngest obs whatsapp appzapper loopback
+  inngest/tap/inngest obs whatsapp appzapper loopback
 ```
+
+`inngest` must be tap-qualified, for the same reason `stripe/stripe-cli/stripe` is in [step 8](#8-homebrew-and-clis): it lives in a third-party tap, so the bare name fails and `brew search inngest` reports nothing until the tap is added. Homebrew asks to trust the tap on first install. It's also the odd one out in this list — the Inngest CLI and dev server (`inngest dev`), not a GUI app — but Inngest ships it as a cask, so this is where brew wants it.
+
+The install aborts with `It seems there is already a Binary at '/opt/homebrew/bin/inngest'` if a hand-downloaded copy is in the way. Delete that first; brew won't adopt a loose binary the way `--adopt` handles an app.
 
 If an app is already in `/Applications` from a manual download, adopt it instead of reinstalling over it:
 
@@ -459,7 +485,7 @@ Skills arrive two ways, and it matters which owns a given skill:
 
 | Mechanism | Installed by | Lives in | Updated by |
 | --------- | ------------ | -------- | ---------- |
-| **Plugins** | `/plugin install` in a session | `~/.claude/plugins/cache/` | Claude Code |
+| **Plugins** | `/plugin install` in a session | `~/.claude/plugins/cache/` | `plugup` (part of `up`), plus Claude Code's own background updater — see below |
 | **npx registry** | `npx skills add` in a shell | `~/.agents/skills/`, symlinked into `~/.claude/skills/` | `npx skills update -g` (part of `up`) |
 
 Plugin skills are namespaced when invoked (`agent-skills:code-review-and-quality`); npx skills are bare (`neon-postgres`). Install each skill **one way only** — one present through both shows up twice in the picker.
@@ -475,13 +501,21 @@ Plugin skills are namespaced when invoked (`agent-skills:code-review-and-quality
 /plugin install agent-skills@addy-agent-skills
 /plugin install vercel@claude-plugins-official
 /plugin install stripe@claude-plugins-official
+/plugin install code-simplifier@claude-plugins-official
 ```
 
 | Plugin | Provides |
 | ------ | -------- |
 | `agent-skills@addy-agent-skills` | The addyosmani set — `code-review-and-quality`, `code-simplification`, `security-and-hardening`, `performance-optimization`, and ~20 more |
 | `vercel@claude-plugins-official`  | Next.js, AI SDK, deployment, `react-best-practices` |
-| `stripe@claude-plugins-official`  | `stripe-best-practices`, `stripe-docs`, `upgrade-stripe` |
+| `stripe@claude-plugins-official`  | All seven stripe skills — `stripe-best-practices`, `stripe-docs`, `stripe-projects`, `upgrade-stripe`, `stripe-apps`, `stripe-directory`, `connect-recommend` |
+| `code-simplifier@claude-plugins-official` | The `code-simplifier` agent behind the `/simplify` step of the global workflow |
+
+**Auto-update is per-marketplace, and the defaults differ.** Claude Code refreshes marketplaces and upgrades their installed plugins in the background shortly after a session starts — but only where auto-update is on. Official Anthropic marketplaces default to **on**; third-party ones default to **off**. So `claude-plugins-official` keeps `vercel`, `stripe`, and `code-simplifier` current by itself, while `addy-agent-skills` goes stale silently. Turn it on once per machine:
+
+`/plugin` → **Marketplaces** → `addy-agent-skills` → **Enable auto-update**
+
+That toggle is optional here, though: `up` runs `plugup` ([step 10](#10-shell-config)), which refreshes every marketplace and updates every installed plugin regardless of its auto-update setting. Between the two, plugins stay current the same way npx skills do.
 
 ### Global skills — npx registry
 
@@ -500,11 +534,6 @@ npx skills add addyosmani/web-quality-skills \
   --skill seo \
   -g -a claude-code -y
 
-npx skills add stripe/ai \
-  --skill upgrade-stripe \
-  --skill stripe-projects \
-  -g -a claude-code -y
-
 npx skills add vercel-labs/skills \
   --skill find-skills \
   -g -a claude-code -y
@@ -515,7 +544,7 @@ npx skills add neondatabase/agent-skills \
   -g -a claude-code -y
 ```
 
-The addyosmani development set and `stripe-best-practices` are deliberately absent — the plugins above already provide them.
+The addyosmani development set and every stripe skill are deliberately absent — the plugins above already provide them. The stripe plugin is built from the same `stripe/ai` repo the npx registry serves, so any `npx skills add stripe/ai` line duplicates it exactly.
 
 **Check where each skill landed.** Recent CLI versions sometimes copy a skill straight into `~/.claude/skills/<name>/` rather than installing to `~/.agents/skills/` and symlinking. The install output says which (`→ ~/.claude/skills/seo` means it copied). Relocate anything misplaced:
 
