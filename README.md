@@ -133,27 +133,39 @@ All CLIs in one shot — Node is intentionally excluded, `fnm` owns it ([step 9]
 brew install git gh stripe/stripe-cli/stripe
 ```
 
-Git config:
+Git config — identity, then the four settings the `pull`/`push` workflow in [step 10](#10-shell-config) assumes. Idempotent:
 
 ```bash
 git config --global user.name "Max Hirtenstein" &&
 git config --global user.email "maxhirtens@gmail.com" &&
 git config --global github.user "maxhirtens" &&
 git config --global init.defaultBranch main &&
+git config --global push.autoSetupRemote true &&
+git config --global url."https://github.com/".insteadOf "git@github.com:" &&
+git config --global core.excludesfile ~/.gitignore_global &&
+{ grep -qs '^\.DS_Store$' ~/.gitignore_global || echo '.DS_Store' >> ~/.gitignore_global; } &&
 git config --global --list
 ```
+
+| Setting                 | Why                                                                                          |
+| ----------------------- | -------------------------------------------------------------------------------------------- |
+| `push.autoSetupRemote`  | A first `git push` on a new branch sets its upstream automatically — no `-u` to forget, so `pull all` on the other machine always sees it |
+| `url.insteadOf`         | Rewrites `git@github.com:` URLs to HTTPS. `gh auth login` uses HTTPS ([step 11](#11-github-auth)) and there's no SSH key on this machine, so an SSH-form clone URL would otherwise fail |
+| `core.excludesfile`     | Keeps `.DS_Store` out of every repo. [Step 7](#7-macos-defaults) only suppresses it on network and USB volumes, not local disk |
 
 ## 9. Node via fnm
 
 Installs `fnm`, Node 24 (the Vercel prod runtime), sets it as the global default, and wires up auto-switching so any repo with a `.nvmrc` or `.node-version` picks up its version on `cd`. Idempotent — safe to re-run.
 
+`--version-file-strategy=recursive` makes that work from subdirectories too. The default, `local`, only reads a version file in the directory you land in — so `cd apps/web` in a monorepo whose `.nvmrc` sits at the root silently keeps the global default. With no version file anywhere, fnm falls back to `engines.node` in `package.json`.
+
 ```bash
 brew install fnm \
-  && eval "$(fnm env --use-on-cd --shell zsh)" \
+  && eval "$(fnm env --use-on-cd --version-file-strategy=recursive --shell zsh)" \
   && fnm install 24 \
   && fnm default 24 \
   && { grep -qs 'fnm env' ~/.zshrc \
-       || printf '\n# fnm\neval "$(fnm env --use-on-cd --shell zsh)"\n' >> ~/.zshrc; }
+       || printf '\n# fnm\neval "$(fnm env --use-on-cd --version-file-strategy=recursive --shell zsh)"\n' >> ~/.zshrc; }
 ```
 
 Restart the terminal (or `source ~/.zshrc`), then verify — expect `v24.x`:
@@ -220,7 +232,7 @@ pull() {
 }
 
 # up — update everything
-alias up='brew update && brew upgrade && brew cleanup && brew autoremove; npm update -g; npx skills update -g; softwareupdate -l'
+alias up='brew update && brew upgrade && brew cleanup && brew autoremove; npm update -g; npx skills update -g -y; softwareupdate -l'
 EOF
 ```
 
