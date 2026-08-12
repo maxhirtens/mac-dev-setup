@@ -40,7 +40,8 @@ Do all of this **before** wiping.
 - [ ] Save dev env vars to 1Password
 - [ ] Update the IDE extension list ([Appendix B](#appendix-b-editor-extensions))
 - [ ] Update the Claude skills/plugins list ([Appendix A](#appendix-a-claude-skills))
-- [ ] Update global `CLAUDE.md` and `settings.json`
+- [ ] Commit and push `maxhirtens-skills` — it carries the global `AGENTS.md`
+- [ ] Save `~/.claude/settings.json` to 1Password (the only Claude config not in git)
 
 ## 2. Erase and reinstall
 
@@ -81,9 +82,9 @@ Verify before going further:
 claude --version && claude doctor
 ```
 
-`claude doctor` prints read-only install and settings diagnostics without starting a session — install method, auto-update status, settings-file validation errors, and warnings with suggested fixes. A clean machine ends with `No installation issues found.` (Inside a session, `/doctor` runs a fuller checkup that can also fix what it finds.)
+`claude doctor` prints read-only install and settings diagnostics without starting a session. A clean machine ends with `No installation issues found.` Confirm it reports install method `native` — an npm install ties `claude` to whichever Node version fnm has active, so it vanishes from PATH in any repo pinning a different one.
 
-If `claude --version` reports `command not found`, PATH is the reason. The installer places the launcher at `~/.local/bin/claude`, which is **not** on the default macOS PATH and which the installer does not add for you. It resolves in the shell that ran the install; a new terminal won't see it until [step 10](#10-shell-config) adds the entry permanently. To unblock yourself before then:
+If `claude --version` reports `command not found`, PATH is the reason. The installer places the launcher at `~/.local/bin/claude`, which is **not** on the default macOS PATH and which the installer does not add for you. [Step 10](#10-shell-config) adds it permanently. To unblock yourself before then:
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
@@ -105,10 +106,11 @@ Claude can run the `defaults`, Homebrew, fnm, and skills steps directly. It can'
 
 Config restore:
 
-- Global `CLAUDE.md` and `settings.json` → `~/.claude/` — restore from the saved copies
+- `settings.json` → `~/.claude/settings.json` — restore from the saved copy
+- Global instructions are a symlink to `AGENTS.md` in `maxhirtens-skills`, not a saved copy — see [Appendix A](#appendix-a-claude-skills)
 - `CLAUDE.md` for projects lives in each repo directly
 - Skills need `npx`, so they come after Node — see [Appendix A](#appendix-a-claude-skills)
-- Nothing here needs a manual update step: native installs auto-update, so `up` ([step 10](#10-shell-config)) doesn't cover Claude Code
+- Native installs auto-update, so `up` ([step 10](#10-shell-config)) doesn't cover Claude Code
 
 ## 6. Machine name
 
@@ -152,10 +154,16 @@ brew update
 All CLIs in one shot — Node is intentionally excluded, `fnm` owns it ([step 9](#9-node-via-fnm)):
 
 ```bash
-brew install git gh stripe/stripe-cli/stripe
+brew install git gh stripe/stripe-cli/stripe awscli ffmpeg postgresql@17
 ```
 
-Git config — identity, then the four settings the `pull`/`push` workflow in [step 10](#10-shell-config) assumes. Idempotent:
+`postgresql@17` is here for the client tools only — `pg_dump`, `pg_restore`, `psql`, which land on PATH despite the formula being keg-only. **Never `brew services start` it.** Nothing autostarts on install; confirm with:
+
+```bash
+brew services list | grep postgres   # expect "none"
+```
+
+Git config — identity, then the settings the `pull`/`push` workflow in [step 10](#10-shell-config) assumes. Idempotent:
 
 ```bash
 git config --global user.name "Max Hirtenstein" &&
@@ -166,6 +174,7 @@ git config --global push.autoSetupRemote true &&
 git config --global url."https://github.com/".insteadOf "git@github.com:" &&
 git config --global core.excludesfile ~/.gitignore_global &&
 { grep -qs '^\.DS_Store$' ~/.gitignore_global || echo '.DS_Store' >> ~/.gitignore_global; } &&
+{ grep -qs 'settings.local.json' ~/.gitignore_global || echo '**/.claude/settings.local.json' >> ~/.gitignore_global; } &&
 git config --global --list
 ```
 
@@ -174,6 +183,7 @@ git config --global --list
 | `push.autoSetupRemote`  | A first `git push` on a new branch sets its upstream automatically — no `-u` to forget, so `pull all` on the other machine always sees it |
 | `url.insteadOf`         | Rewrites `git@github.com:` URLs to HTTPS. `gh auth login` uses HTTPS ([step 11](#11-github-auth)) and there's no SSH key on this machine, so an SSH-form clone URL would otherwise fail |
 | `core.excludesfile`     | Keeps `.DS_Store` out of every repo. [Step 7](#7-macos-defaults) only suppresses it on network and USB volumes, not local disk |
+| `settings.local.json`   | Machine-local Claude Code permission grants — never belongs in a repo                          |
 
 ## 9. Node via fnm
 
@@ -262,7 +272,7 @@ pull() {
 }
 
 # up — update everything
-alias up='brew update && brew upgrade && brew cleanup && brew autoremove; npm update -g; npx skills update -g -y; softwareupdate -l'
+alias up='brew update && brew upgrade --greedy && brew cleanup && brew autoremove; npm update -g; npx skills update -g -y; softwareupdate -l'
 EOF
 ```
 
@@ -280,6 +290,8 @@ type pull | head -1 && alias up
 | `pull dev`        | Same, then `development` — ends on `development`                                         |
 | `pull all`        | Fetches every branch, fast-forwards all locals, creates locals for branches pushed from another machine — never switches branches |
 | `up`              | Brew update/upgrade/cleanup/autoremove, global npm, Claude skills, lists macOS updates   |
+
+`--greedy` is load-bearing: without it `brew upgrade` skips every `auto_updates true` cask, which is nearly all of them, and `up` reports success having upgraded no apps at all.
 
 `pull` bails with a readable message — before switching branches — if the directory isn't a git repo or has no `origin`. A missing local `development` is fine: git creates it tracking `origin/development`.
 
@@ -301,9 +313,20 @@ Node and `gh` are both in place now — this is the point to come back and insta
 
 ## 12. GUI apps (casks)
 
+Anything with a working cask goes through brew so `up` can see it. Only apps without one are installed by hand ([step 16](#16-remaining-gui-installs)).
+
 ```bash
-brew install --cask vlc cursor zoom spotify superduper transmission private-internet-access
+brew install --cask vlc cursor zoom spotify superduper transmission \
+  inngest obs whatsapp appzapper loopback
 ```
+
+If an app is already in `/Applications` from a manual download, adopt it instead of reinstalling over it:
+
+```bash
+brew install --cask --adopt <cask>
+```
+
+`--adopt` shells out to `sudo chmod`, so run it with `!`. An unadopted app is invisible to `up`.
 
 Verify and tidy up:
 
@@ -348,7 +371,20 @@ Cursor is primary; VS Code is optional.
   "files.associations": {
     "*.env": "plaintext",
     ".env*": "plaintext"
-  }
+  },
+  "cursor.composer.usageSummaryDisplay": "always",
+  "explorer.confirmDelete": false,
+  "redhat.telemetry.enabled": false,
+  "yaml.disableSchemaDetection": [
+    "**/docker-compose.yml",
+    "**/docker-compose.yaml",
+    "**/docker-compose.*.yml",
+    "**/docker-compose.*.yaml",
+    "**/compose.yml",
+    "**/compose.yaml",
+    "**/compose.*.yml",
+    "**/compose.*.yaml"
+  ]
 }
 ```
 
@@ -398,36 +434,58 @@ Add `.env` files back from 1Password.
 
 ## 16. Remaining GUI installs
 
-- SuperDuper
-- Loopback
-- AppZapper
+Download and install by hand. SuperDuper, AppZapper, and Loopback moved to [step 12](#12-gui-apps-casks) — don't install those manually.
+
+- Private Internet Access — approve the VPN system extension in **Settings → General → Login Items & Extensions** on first launch
 - Titan Firmware and App _(optional)_
 - GLM _(optional)_
 - SoundID Reference _(optional)_
+
+PIA has a cask but it always fails on macOS 26 — its installer can't strip the quarantine attribute from its own signed binaries, so brew purges the entry. Use the download from privateinternetaccess.com and let PIA self-update; `up` will never see it.
+
+The other three have no cask (checked 08/2026). Before installing manually, check whether one has appeared since:
+
+```bash
+brew search --cask <name>
+```
+
+Chrome and 1Password are absent here because [step 4](#4-manual-installs) installs them before Homebrew exists. Both have casks and can be adopted after the fact.
 
 ---
 
 ## Appendix A: Claude skills
 
-Two directories matter, and only one of them is Anthropic's:
+Skills arrive two ways, and it matters which owns a given skill:
 
-| Directory          | Read by                        | Notes                                                                 |
-| ------------------ | ------------------------------ | --------------------------------------------------------------------- |
-| `~/.claude/skills/` | Claude Code                    | The documented location — one `<skill-name>/SKILL.md` per skill        |
-| `~/.agents/skills/` | `skills` CLI / other agents    | Not an Anthropic path; the cross-agent convention the CLI installs into |
+| Mechanism | Installed by | Lives in | Updated by |
+| --------- | ------------ | -------- | ---------- |
+| **Plugins** | `/plugin install` in a session | `~/.claude/plugins/cache/` | Claude Code |
+| **npx registry** | `npx skills add` in a shell | `~/.agents/skills/`, symlinked into `~/.claude/skills/` | `npx skills update -g` (part of `up`) |
 
-That split is why the custom skills below get symlinked into both.
+Plugin skills are namespaced when invoked (`agent-skills:code-review-and-quality`); npx skills are bare (`neon-postgres`). Install each skill **one way only** — one present through both shows up twice in the picker.
 
-Anthropic also ships a first-party plugin marketplace, which the `npx` blocks below don't use but which is worth knowing about for anything not on the list:
+`~/.agents/skills/` is the canonical store. `~/.claude/skills/` holds nothing but symlinks into it.
+
+### Plugins
 
 ```
 /plugin marketplace add anthropics/claude-plugins-official
-/plugin install <plugin-name>@claude-plugins-official
+/plugin marketplace add addyosmani/agent-skills
+
+/plugin install agent-skills@addy-agent-skills
+/plugin install vercel@claude-plugins-official
+/plugin install stripe@claude-plugins-official
 ```
+
+| Plugin | Provides |
+| ------ | -------- |
+| `agent-skills@addy-agent-skills` | The addyosmani set — `code-review-and-quality`, `code-simplification`, `security-and-hardening`, `performance-optimization`, and ~20 more |
+| `vercel@claude-plugins-official`  | Next.js, AI SDK, deployment, `react-best-practices` |
+| `stripe@claude-plugins-official`  | `stripe-best-practices`, `stripe-docs`, `upgrade-stripe` |
 
 ### Global skills — npx registry
 
-`npx skills` is a third-party CLI, not an Anthropic tool. Each block installs one source repo globally for Claude Code (`-a claude-code`). Run them together or one at a time.
+`npx skills` is a third-party CLI, not an Anthropic tool. Install for Claude Code only (`-a claude-code`) — never `-a '*'`, which fans the skill out into a dozen other agent directories.
 
 ```bash
 npx skills add inngest/inngest-skills \
@@ -438,32 +496,13 @@ npx skills add inngest/inngest-skills \
   --skill inngest-steps \
   -g -a claude-code -y
 
-npx skills add addyosmani/agent-skills \
-  --skill api-and-interface-design \
-  --skill code-review-and-quality \
-  --skill code-simplification \
-  --skill frontend-ui-engineering \
-  --skill security-and-hardening \
-  --skill performance-optimization \
-  -g -a claude-code -y
-
 npx skills add addyosmani/web-quality-skills \
   --skill seo \
   -g -a claude-code -y
 
-npx skills add coreyhaines31/marketingskills \
-  --skill copywriting \
-  --skill marketing-ideas \
-  --skill marketing-psychology \
-  -g -a claude-code -y
-
 npx skills add stripe/ai \
-  --skill stripe-best-practices \
   --skill upgrade-stripe \
-  -g -a claude-code -y
-
-npx skills add vercel-labs/agent-skills \
-  --skill react-best-practices \
+  --skill stripe-projects \
   -g -a claude-code -y
 
 npx skills add vercel-labs/skills \
@@ -472,32 +511,64 @@ npx skills add vercel-labs/skills \
 
 npx skills add neondatabase/agent-skills \
   --skill neon-postgres \
+  --skill neon-postgres-branches \
   -g -a claude-code -y
 ```
 
-### Custom skills
+The addyosmani development set and `stripe-best-practices` are deliberately absent — the plugins above already provide them.
 
-Source of truth is the repo in `Code/` — symlink each skill into `~/.agents/skills` so edits flow both ways. Clone first, then link:
+**Check where each skill landed.** Recent CLI versions sometimes copy a skill straight into `~/.claude/skills/<name>/` rather than installing to `~/.agents/skills/` and symlinking. The install output says which (`→ ~/.claude/skills/seo` means it copied). Relocate anything misplaced:
+
+```bash
+for s in ~/.claude/skills/*/; do
+  n=$(basename "$s")
+  [ -L "${s%/}" ] && continue
+  mv "${s%/}" ~/.agents/skills/"$n"
+  ln -s ../../.agents/skills/"$n" ~/.claude/skills/"$n"
+done
+```
+
+The lockfile keys skills by name, not path, so moving one is invisible to `npx skills update`. Verify:
+
+```bash
+find ~/.claude/skills -maxdepth 1 -mindepth 1 ! -type l    # expect no output
+npx skills list
+```
+
+### Custom skills and global instructions
+
+Both come from `maxhirtens-skills`, and nothing is a copy — every target symlinks back to the repo, so `git pull` updates the live config.
 
 ```bash
 git clone https://github.com/maxhirtens/maxhirtens-skills.git ~/Desktop/Code/maxhirtens-skills
+```
 
+`AGENTS.md` in that repo is the canonical global instructions. Both agent locations point at it:
+
+```bash
+mkdir -p ~/.agents
+ln -s ~/Desktop/Code/maxhirtens-skills/AGENTS.md ~/.claude/CLAUDE.md
+ln -s ~/Desktop/Code/maxhirtens-skills/AGENTS.md ~/.agents/AGENTS.md
+```
+
+Edit the repo file, never `~/.claude/CLAUDE.md` directly. Per-project rules belong in that project's own `AGENTS.md`. Miss these links and there's no error — Claude Code just runs with no global instructions.
+
+Custom skills, same idea:
+
+```bash
 mkdir -p ~/.agents/skills
 ln -s ~/Desktop/Code/maxhirtens-skills/maxhirtens-fix-or-feature ~/.agents/skills/
 ln -s ~/Desktop/Code/maxhirtens-skills/maxhirtens-ship-to-main ~/.agents/skills/
-```
 
-Then link the same directories into the global Claude skills dir:
-
-```bash
 mkdir -p ~/.claude/skills
-ln -s ~/Desktop/Code/maxhirtens-skills/maxhirtens-fix-or-feature ~/.claude/skills/
-ln -s ~/Desktop/Code/maxhirtens-skills/maxhirtens-ship-to-main ~/.claude/skills/
+ln -s ../../.agents/skills/maxhirtens-fix-or-feature ~/.claude/skills/
+ln -s ../../.agents/skills/maxhirtens-ship-to-main ~/.claude/skills/
 ```
 
-Verify both sets of links resolve:
+Verify every link resolves:
 
 ```bash
+readlink -f ~/.claude/CLAUDE.md ~/.agents/AGENTS.md
 ls -l ~/.agents/skills ~/.claude/skills
 ```
 
@@ -525,6 +596,7 @@ for ext in \
   ms-playwright.playwright \
   anthropic.claude-code \
   anysphere.remote-containers \
+  anysphere.remote-ssh \
   docker.docker \
   mechatroner.rainbow-csv \
   tomoki1207.pdf; do
@@ -550,5 +622,6 @@ done
 | `redhat.vscode-yaml`                     | YAML schema validation         |
 | `anthropic.claude-code`                  | Claude Code integration        |
 | `anysphere.remote-containers` + `docker.docker` | Container development   |
+| `anysphere.remote-ssh`                   | Editing over SSH               |
 | `mechatroner.rainbow-csv`                | CSV column highlighting        |
 | `tomoki1207.pdf`                         | PDF preview                    |
