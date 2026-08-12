@@ -67,14 +67,35 @@ Install in this order — Chrome and 1Password first, so everything after can be
 
 ## 5. Claude Code
 
-Install this early — it's a plain `curl`, with no dependency on Homebrew or Node — so Claude can help run the rest of this doc.
+Install this early — the native installer is a plain `curl` with no dependency on Homebrew or Node, so Claude can help run the rest of this doc.
 
 ```bash
 curl -fsSL https://claude.ai/install.sh | bash
+```
+
+There is also a Homebrew cask (`brew install --cask claude-code`), deliberately not used here: it would push this step after [step 8](#8-homebrew-and-clis), and Homebrew installs don't auto-update. The native install updates itself in the background.
+
+Verify before going further:
+
+```bash
+claude --version && claude doctor
+```
+
+`claude doctor` prints read-only install and settings diagnostics without starting a session — install method, auto-update status, settings-file validation errors, and warnings with suggested fixes. A clean machine ends with `No installation issues found.` (Inside a session, `/doctor` runs a fuller checkup that can also fix what it finds.)
+
+If `claude --version` reports `command not found`, PATH is the reason. The installer places the launcher at `~/.local/bin/claude`, which is **not** on the default macOS PATH and which the installer does not add for you. It resolves in the shell that ran the install; a new terminal won't see it until [step 10](#10-shell-config) adds the entry permanently. To unblock yourself before then:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Then start it and log in via the browser:
+
+```bash
 claude
 ```
 
-Run `claude` once to log in via the browser. Then point it at this doc:
+Point it at this doc:
 
 ```
 Walk me through https://github.com/maxhirtens/mac-dev-setup
@@ -84,9 +105,10 @@ Claude can run the `defaults`, Homebrew, fnm, and skills steps directly. It can'
 
 Config restore:
 
-- Global `CLAUDE.md` and `settings.json` — restore from the saved copies
+- Global `CLAUDE.md` and `settings.json` → `~/.claude/` — restore from the saved copies
 - `CLAUDE.md` for projects lives in each repo directly
 - Skills need `npx`, so they come after Node — see [Appendix A](#appendix-a-claude-skills)
+- Nothing here needs a manual update step: native installs auto-update, so `up` ([step 10](#10-shell-config)) doesn't cover Claude Code
 
 ## 6. Machine name
 
@@ -155,7 +177,9 @@ git config --global --list
 
 ## 9. Node via fnm
 
-Installs `fnm`, Node 24 (the Vercel prod runtime), sets it as the global default, and wires up auto-switching so any repo with a `.nvmrc` or `.node-version` picks up its version on `cd`. Idempotent — safe to re-run.
+Installs `fnm`, Node 24 (the Vercel prod runtime), sets it as the global default, and wires up auto-switching so any repo with a `.nvmrc` or `.node-version` picks up its version on `cd`.
+
+Like [step 10](#10-shell-config), the `grep -qs 'fnm env'` guard makes this install-once: safe to paste twice, but it will not rewrite an existing `fnm env` line if the flags below change. Update those by hand on a machine that already ran this.
 
 `--version-file-strategy=recursive` makes that work from subdirectories too. The default, `local`, only reads a version file in the directory you land in — so `cd apps/web` in a monorepo whose `.nvmrc` sits at the root silently keeps the global default. With no version file anywhere, fnm falls back to `engines.node` in `package.json`.
 
@@ -176,12 +200,18 @@ node -v && npm -v
 
 ## 10. Shell config
 
-Everything else that belongs in `~/.zshrc`, on top of the fnm line from [step 9](#9-node-via-fnm) — PATH de-duplication, git branch helpers, and a one-shot update command. Idempotent — safe to re-run.
+Everything else that belongs in `~/.zshrc`, on top of the fnm line from [step 9](#9-node-via-fnm) — PATH de-duplication, the `~/.local/bin` entry that makes `claude` resolvable, git branch helpers, and a one-shot update command.
+
+**Install-once, not re-runnable.** The `grep` guard skips the whole block if it's already present, so this is safe to paste twice — but re-running it will *not* pick up later edits to `pull` or `up`. To update an existing machine, edit `~/.zshrc` by hand, or delete the block and re-run.
 
 ```bash
 grep -qs 'typeset -U path' ~/.zshrc || cat >> ~/.zshrc <<'EOF'
 
 typeset -U path PATH
+
+# claude (step 5) installs to ~/.local/bin, which is not on the default PATH.
+# Harmless if the installer also adds it — typeset -U above collapses the duplicate.
+export PATH="$HOME/.local/bin:$PATH"
 
 # pull main | dev | all — refresh branches from origin
 pull() {
@@ -245,6 +275,7 @@ type pull | head -1 && alias up
 | Command           | Does                                                                                   |
 | ----------------- | -------------------------------------------------------------------------------------- |
 | `typeset -U path` | Keeps PATH de-duplicated, so prepends can't stack up across nested shells                |
+| `~/.local/bin` on PATH | Where [step 5](#5-claude-code) puts `claude`; not on the default macOS PATH          |
 | `pull main`       | `checkout main` → `pull origin main`                                                     |
 | `pull dev`        | Same, then `development` — ends on `development`                                         |
 | `pull all`        | Fetches every branch, fast-forwards all locals, creates locals for branches pushed from another machine — never switches branches |
@@ -254,7 +285,9 @@ type pull | head -1 && alias up
 
 `pull all` is the one to run after pushing work from another machine. It prunes deleted remotes, fast-forwards local branches in place without checking them out, and creates a local tracking branch for anything new on `origin`. Branches whose remote was deleted are listed as `stale` rather than removed — deletion stays a manual call.
 
-The output only lists branches that actually changed, so a repo already in sync prints nothing. Branches with no upstream, and any that have diverged rather than fast-forwarding, are left untouched and unreported.
+The output only lists branches that actually changed, so a repo already in sync prints nothing — apart from the `stale` line, which is a standing condition rather than a change and so reprints on every run until you delete the branch. Branches with no upstream, and any that have diverged rather than fast-forwarding, are left untouched and unreported.
+
+> **`pull all` changed meaning.** It previously synced `main` → `development` and left you on `development`. It now sweeps every branch and never switches — `pull dev` is the new spelling of the old behavior. Worth unlearning deliberately if the old one is in muscle memory.
 
 ## 11. GitHub auth
 
@@ -376,9 +409,25 @@ Add `.env` files back from 1Password.
 
 ## Appendix A: Claude skills
 
+Two directories matter, and only one of them is Anthropic's:
+
+| Directory          | Read by                        | Notes                                                                 |
+| ------------------ | ------------------------------ | --------------------------------------------------------------------- |
+| `~/.claude/skills/` | Claude Code                    | The documented location — one `<skill-name>/SKILL.md` per skill        |
+| `~/.agents/skills/` | `skills` CLI / other agents    | Not an Anthropic path; the cross-agent convention the CLI installs into |
+
+That split is why the custom skills below get symlinked into both.
+
+Anthropic also ships a first-party plugin marketplace, which the `npx` blocks below don't use but which is worth knowing about for anything not on the list:
+
+```
+/plugin marketplace add anthropics/claude-plugins-official
+/plugin install <plugin-name>@claude-plugins-official
+```
+
 ### Global skills — npx registry
 
-Each block installs one source repo globally for Claude Code. Run them together or one at a time.
+`npx skills` is a third-party CLI, not an Anthropic tool. Each block installs one source repo globally for Claude Code (`-a claude-code`). Run them together or one at a time.
 
 ```bash
 npx skills add inngest/inngest-skills \
