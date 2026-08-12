@@ -184,14 +184,20 @@ pull() {
 
   if [[ "$target" == all ]]; then
     git fetch --all --prune || return 1
-    local cur b gone
+    local cur b before gone
     cur="$(git branch --show-current)"
 
-    # fast-forward branches we already have
-    [[ -n "$cur" ]] && git merge --ff-only '@{u}' >/dev/null 2>&1 && echo "  ff  $cur (current)"
+    # fast-forward branches we already have, reporting only the ones that moved
+    if [[ -n "$cur" ]]; then
+      before="$(git rev-parse HEAD)"
+      git merge --ff-only '@{u}' >/dev/null 2>&1
+      [[ "$(git rev-parse HEAD)" != "$before" ]] && echo "  ff  $cur (current)"
+    fi
     for b in $(git for-each-ref --format='%(refname:short)' refs/heads); do
       [[ "$b" == "$cur" ]] && continue
-      git fetch -q origin "$b:$b" 2>/dev/null && echo "  ff  $b"
+      before="$(git rev-parse "$b")"
+      git fetch -q origin "$b:$b" 2>/dev/null || continue
+      [[ "$(git rev-parse "$b")" != "$before" ]] && echo "  ff  $b"
     done
 
     # create locals for branches pushed from elsewhere
@@ -204,7 +210,7 @@ pull() {
 
     # flag locals whose remote is gone, but don't delete them
     gone=$(git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads | awk '/\[gone\]/{print $1}')
-    [[ -n "$gone" ]] && echo "  stale (remote deleted): $(echo $gone | tr '\n' ' ')"
+    [[ -n "$gone" ]] && echo "  stale (remote deleted): ${gone//$'\n'/ }"
     return 0
   fi
 
@@ -235,6 +241,8 @@ type pull | head -1 && alias up
 `pull` bails with a readable message — before switching branches — if the directory isn't a git repo or has no `origin`. A missing local `development` is fine: git creates it tracking `origin/development`.
 
 `pull all` is the one to run after pushing work from another machine. It prunes deleted remotes, fast-forwards local branches in place without checking them out, and creates a local tracking branch for anything new on `origin`. Branches whose remote was deleted are listed as `stale` rather than removed — deletion stays a manual call.
+
+The output only lists branches that actually changed, so a repo already in sync prints nothing. Branches with no upstream, and any that have diverged rather than fast-forwarding, are left untouched and unreported.
 
 ## 11. GitHub auth
 
