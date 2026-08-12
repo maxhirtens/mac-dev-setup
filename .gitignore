@@ -1,0 +1,8 @@
+# This repo is cloned at step 5, before step 8 sets core.excludesfile,
+# so it can't rely on the global ignore file.
+
+# macOS
+.DS_Store
+
+# Claude Code — machine-local permissions, not shared
+.claude/settings.local.json
