@@ -1,6 +1,6 @@
 # macOS Clean Install for Development
 
-**@maxhirtens** — last updated 07/2026
+**@maxhirtens** — last updated 08/2026
 
 Start-to-finish setup for a fresh macOS machine: prep, system config, CLIs, editor, agent tooling.
 
@@ -19,12 +19,13 @@ Start-to-finish setup for a fresh macOS machine: prep, system config, CLIs, edit
 7. [macOS defaults](#7-macos-defaults)
 8. [Homebrew and CLIs](#8-homebrew-and-clis)
 9. [Node via fnm](#9-node-via-fnm)
-10. [GitHub auth](#10-github-auth)
-11. [GUI apps (casks)](#11-gui-apps-casks)
-12. [Cursor / VS Code](#12-cursor--vs-code)
-13. [System Settings](#13-system-settings)
-14. [Clone repos](#14-clone-repos)
-15. [Remaining GUI installs](#15-remaining-gui-installs)
+10. [Shell config](#10-shell-config)
+11. [GitHub auth](#11-github-auth)
+12. [GUI apps (casks)](#12-gui-apps-casks)
+13. [Cursor / VS Code](#13-cursor--vs-code)
+14. [System Settings](#14-system-settings)
+15. [Clone repos](#15-clone-repos)
+16. [Remaining GUI installs](#16-remaining-gui-installs)
 
 Appendices: [A. Claude skills](#appendix-a-claude-skills) · [B. Editor extensions](#appendix-b-editor-extensions)
 
@@ -161,7 +162,81 @@ Restart the terminal (or `source ~/.zshrc`), then verify — expect `v24.x`:
 node -v && npm -v
 ```
 
-## 10. GitHub auth
+## 10. Shell config
+
+Everything else that belongs in `~/.zshrc`, on top of the fnm line from [step 9](#9-node-via-fnm) — PATH de-duplication, git branch helpers, and a one-shot update command. Idempotent — safe to re-run.
+
+```bash
+grep -qs 'typeset -U path' ~/.zshrc || cat >> ~/.zshrc <<'EOF'
+
+typeset -U path PATH
+
+# pull main | dev | all — refresh branches from origin
+pull() {
+  local target="$1"
+  [[ "$target" == main || "$target" == dev || "$target" == all ]] \
+    || { echo "usage: pull {main|dev|all}" >&2; return 1; }
+
+  git rev-parse --git-dir >/dev/null 2>&1 \
+    || { echo "pull: not a git repository" >&2; return 1; }
+  git remote get-url origin >/dev/null 2>&1 \
+    || { echo "pull: no 'origin' remote" >&2; return 1; }
+
+  if [[ "$target" == all ]]; then
+    git fetch --all --prune || return 1
+    local cur b gone
+    cur="$(git branch --show-current)"
+
+    # fast-forward branches we already have
+    [[ -n "$cur" ]] && git merge --ff-only '@{u}' >/dev/null 2>&1 && echo "  ff  $cur (current)"
+    for b in $(git for-each-ref --format='%(refname:short)' refs/heads); do
+      [[ "$b" == "$cur" ]] && continue
+      git fetch -q origin "$b:$b" 2>/dev/null && echo "  ff  $b"
+    done
+
+    # create locals for branches pushed from elsewhere
+    for b in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin); do
+      [[ "$b" == origin || "$b" == origin/HEAD ]] && continue
+      b=${b#origin/}
+      git show-ref --verify --quiet "refs/heads/$b" && continue
+      git branch -q --track "$b" "origin/$b" && echo "  new $b"
+    done
+
+    # flag locals whose remote is gone, but don't delete them
+    gone=$(git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads | awk '/\[gone\]/{print $1}')
+    [[ -n "$gone" ]] && echo "  stale (remote deleted): $(echo $gone | tr '\n' ' ')"
+    return 0
+  fi
+
+  git checkout main && git pull origin main || return 1
+  [[ "$target" == dev ]] || return 0
+  git checkout development && git pull origin development
+}
+
+# up — update everything
+alias up='brew update && brew upgrade && brew cleanup && brew autoremove; npm update -g; npx skills update -g; softwareupdate -l'
+EOF
+```
+
+Restart the terminal (or `source ~/.zshrc`), then verify:
+
+```bash
+type pull | head -1 && alias up
+```
+
+| Command           | Does                                                                                   |
+| ----------------- | -------------------------------------------------------------------------------------- |
+| `typeset -U path` | Keeps PATH de-duplicated, so prepends can't stack up across nested shells                |
+| `pull main`       | `checkout main` → `pull origin main`                                                     |
+| `pull dev`        | Same, then `development` — ends on `development`                                         |
+| `pull all`        | Fetches every branch, fast-forwards all locals, creates locals for branches pushed from another machine — never switches branches |
+| `up`              | Brew update/upgrade/cleanup/autoremove, global npm, Claude skills, lists macOS updates   |
+
+`pull` bails with a readable message — before switching branches — if the directory isn't a git repo or has no `origin`. A missing local `development` is fine: git creates it tracking `origin/development`.
+
+`pull all` is the one to run after pushing work from another machine. It prunes deleted remotes, fast-forwards local branches in place without checking them out, and creates a local tracking branch for anything new on `origin`. Branches whose remote was deleted are listed as `stale` rather than removed — deletion stays a manual call.
+
+## 11. GitHub auth
 
 ```bash
 gh auth login
@@ -171,7 +246,7 @@ Choose **HTTPS** when prompted.
 
 Node and `gh` are both in place now — this is the point to come back and install skills from [Appendix A](#appendix-a-claude-skills).
 
-## 11. GUI apps (casks)
+## 12. GUI apps (casks)
 
 ```bash
 brew install --cask vlc cursor zoom spotify superduper transmission private-internet-access
@@ -183,7 +258,7 @@ Verify and tidy up:
 brew doctor && brew cleanup
 ```
 
-## 12. Cursor / VS Code
+## 13. Cursor / VS Code
 
 Cursor is primary; VS Code is optional.
 
@@ -224,7 +299,7 @@ Cursor is primary; VS Code is optional.
 }
 ```
 
-## 13. System Settings
+## 14. System Settings
 
 **Security**
 
@@ -253,7 +328,7 @@ Cursor is primary; VS Code is optional.
 - [ ] Menu Bar → adjust to preference
 - [ ] Finder → Settings → show hard disks
 
-## 14. Clone repos
+## 15. Clone repos
 
 ```bash
 mkdir -p ~/Desktop/Code && cd ~/Desktop/Code
@@ -268,7 +343,7 @@ gh repo list <owner> --limit 50
 
 Add `.env` files back from 1Password.
 
-## 15. Remaining GUI installs
+## 16. Remaining GUI installs
 
 - SuperDuper
 - Loopback
