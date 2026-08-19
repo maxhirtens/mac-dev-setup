@@ -26,6 +26,7 @@ Start-to-finish setup for a fresh macOS machine: prep, system config, CLIs, edit
 14. [System Settings](#14-system-settings)
 15. [Clone repos](#15-clone-repos)
 16. [Remaining GUI installs](#16-remaining-gui-installs)
+17. [Private Internet Access](#17-private-internet-access)
 
 Appendices: [A. Claude skills](#appendix-a-claude-skills) · [B. Editor extensions](#appendix-b-editor-extensions)
 
@@ -462,7 +463,7 @@ Add `.env` files back from 1Password.
 
 Download and install by hand. SuperDuper, AppZapper, and Loopback moved to [step 12](#12-gui-apps-casks) — don't install those manually.
 
-- Private Internet Access — approve the VPN system extension in **Settings → General → Login Items & Extensions** on first launch
+- Private Internet Access — approve the VPN system extension in **Settings → General → Login Items & Extensions** on first launch, then configure it ([step 17](#17-private-internet-access))
 - Titan Firmware and App _(optional)_
 - GLM _(optional)_
 - SoundID Reference _(optional)_
@@ -476,6 +477,38 @@ brew search --cask <name>
 ```
 
 Chrome and 1Password are absent here because [step 4](#4-manual-installs) installs them before Homebrew exists. Both have casks and can be adopted after the fact.
+
+## 17. Private Internet Access
+
+Installed by hand in [step 16](#16-remaining-gui-installs). None of the settings below are defaults — walk them on first launch. Open the app, then the three-dot menu → **Settings**.
+
+**General**
+
+- [ ] Launch on System Startup
+- [ ] Connect on Launch
+
+Both are off out of the box, so the VPN only protects you when you remember it. Together they mean the tunnel is up before you open a browser.
+
+**Protocols**
+
+- [ ] Protocol → **WireGuard** (ships set to OpenVPN)
+
+WireGuard connects in about a second, survives sleep/wake and network switches without a manual reconnect, and is easier on battery. OpenVPN is only worth keeping for a network that blocks WireGuard's UDP outright. If connecting fails right after the switch, re-check the system extension approval from [step 16](#16-remaining-gui-installs).
+
+**Privacy**
+
+- [ ] VPN Kill Switch → on
+- [ ] Advanced Kill Switch → off unless you want the VPN to be mandatory
+
+**VPN Kill Switch** blocks traffic if the tunnel drops while you're connected — that's the one you want on. **Advanced Kill Switch** blocks all traffic whenever PIA isn't connected, _including while the app is quit_, which is a reliable way to lose internet on a machine you don't keep on the VPN full-time. Turn it on deliberately or not at all.
+
+Confirm it's actually routing:
+
+```bash
+curl -s https://ipinfo.io/ip
+```
+
+Run it connected and disconnected — the address must differ.
 
 ---
 
