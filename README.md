@@ -399,6 +399,7 @@ Cursor is primary; VS Code is optional.
     "*.env": "plaintext",
     ".env*": "plaintext"
   },
+  "window.autoDetectColorScheme": false,
   "cursor.composer.usageSummaryDisplay": "always",
   "explorer.confirmDelete": false,
   "redhat.telemetry.enabled": false,
@@ -411,7 +412,9 @@ Cursor is primary; VS Code is optional.
     "**/compose.yaml",
     "**/compose.*.yml",
     "**/compose.*.yaml"
-  ]
+  ],
+  "cursor.composer.queueMessageDefaultBehavior": "steer",
+  "json.schemaDownload.enable": true
 }
 ```
 
