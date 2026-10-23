@@ -81,5 +81,5 @@ print(" ".join(p for p in json.load(sys.stdin).get("dependencies", {}) if p not 
   echo "nodeup: $prev -> $new. Remove the old one with: fnm uninstall $prev"
 }
 
-# up — update everything
-alias up='brew update && brew upgrade --greedy && brew cleanup && brew autoremove; nodeup; npm update -g; npx skills update -g -y; plugup; softwareupdate -l'
+# up — update everything. Pulls this repo first and re-sources it, so this run uses the latest nodeup/plugup.
+alias up='git -C ~/Desktop/Code/mac-dev-setup pull --ff-only && source ~/Desktop/Code/mac-dev-setup/shell/zshrc.zsh; brew update && brew upgrade --greedy && brew cleanup && brew autoremove; nodeup; npm update -g; npx skills update -g -y; plugup; softwareupdate -l'
