@@ -192,17 +192,21 @@ git config --global --list
 
 ## 9. Node via fnm
 
-Installs `fnm`, Node 24 (the Vercel prod runtime), sets it as the global default, and wires up auto-switching so any repo with a `.nvmrc` or `.node-version` picks up its version on `cd`.
+Installs `fnm`, Node 24 (the Vercel prod runtime), sets it as the global default, installs the Vercel CLI, and wires up auto-switching so any repo with a `.nvmrc` or `.node-version` picks up its version on `cd`.
 
 Like [step 10](#10-shell-config), the `grep -qs 'fnm env'` guard makes this install-once: safe to paste twice, but it will not rewrite an existing `fnm env` line if the flags below change. Update those by hand on a machine that already ran this.
 
 `--version-file-strategy=recursive` makes that work from subdirectories too. The default, `local`, only reads a version file in the directory you land in — so `cd apps/web` in a monorepo whose `.nvmrc` sits at the root silently keeps the global default. With no version file anywhere, fnm falls back to `engines.node` in `package.json`.
+
+The Vercel CLI is a global npm package, so it needs fnm's Node active first — and it lives under that Node version only. `up` keeps it current (`npm update -g`) and `nodeup` carries it across Node patches ([step 10](#10-shell-config)).
 
 ```bash
 brew install fnm \
   && eval "$(fnm env --use-on-cd --version-file-strategy=recursive --shell zsh)" \
   && fnm install 24 \
   && fnm default 24 \
+  && fnm use 24 \
+  && npm install -g vercel \
   && { grep -qs 'fnm env' ~/.zshrc \
        || printf '\n# fnm\neval "$(fnm env --use-on-cd --version-file-strategy=recursive --shell zsh)"\n' >> ~/.zshrc; }
 ```
@@ -210,14 +214,14 @@ brew install fnm \
 Restart the terminal (or `source ~/.zshrc`), then verify — expect `v24.x`:
 
 ```bash
-node -v && npm -v
+node -v && npm -v && vercel --version
 ```
 
 ## 10. Shell config
 
 Everything else that belongs in `~/.zshrc`, on top of the fnm line from [step 9](#9-node-via-fnm) — PATH de-duplication, the `~/.local/bin` entry that makes `claude` resolvable, git branch helpers, and a one-shot update command.
 
-**Install-once, not re-runnable.** The `grep` guard skips the whole block if it's already present, so this is safe to paste twice — but re-running it will *not* pick up later edits to `pull`, `plugup`, or `up`. To update an existing machine, edit `~/.zshrc` by hand, or delete the block and re-run.
+**Install-once, not re-runnable.** The `grep` guard skips the whole block if it's already present, so this is safe to paste twice — but re-running it will *not* pick up later edits to `pull`, `plugup`, `nodeup`, or `up`. To update an existing machine, edit `~/.zshrc` by hand, or delete the block and re-run.
 
 ```bash
 grep -qs 'typeset -U path' ~/.zshrc || cat >> ~/.zshrc <<'EOF'
@@ -289,15 +293,29 @@ print(" ".join(json.load(open(f)).get("plugins", {})) if os.path.exists(f) else 
   done
 }
 
+# nodeup — install the newest Node 24 and make it the default.
+# fnm keeps global npm packages per version, so a new patch starts with none; copy them over from the old default.
+nodeup() {
+  local prev new pkgs
+  prev=$(fnm list | awk '/default/ {print $2}')
+  fnm install 24 && fnm default 24 && fnm use 24 || return 1
+  new=$(fnm current)
+  [[ -z "$prev" || "$prev" == system || "$prev" == "$new" ]] && return 0
+  pkgs=$(fnm exec --using="$prev" npm ls -g --depth=0 --json | python3 -c 'import json,sys
+print(" ".join(p for p in json.load(sys.stdin).get("dependencies", {}) if p not in ("npm", "corepack")))')
+  [[ -n "$pkgs" ]] && npm install -g ${=pkgs}
+  echo "nodeup: $prev -> $new. Remove the old one with: fnm uninstall $prev"
+}
+
 # up — update everything
-alias up='brew update && brew upgrade --greedy && brew cleanup && brew autoremove; npm update -g; npx skills update -g -y; plugup; softwareupdate -l'
+alias up='brew update && brew upgrade --greedy && brew cleanup && brew autoremove; nodeup; npm update -g; npx skills update -g -y; plugup; softwareupdate -l'
 EOF
 ```
 
 Restart the terminal (or `source ~/.zshrc`), then verify:
 
 ```bash
-type pull | head -1 && type plugup | head -1 && alias up
+type pull | head -1 && type plugup | head -1 && type nodeup | head -1 && alias up
 ```
 
 | Command           | Does                                                                                   |
@@ -308,11 +326,14 @@ type pull | head -1 && type plugup | head -1 && alias up
 | `pull dev`        | Same, then `development` — ends on `development`                                         |
 | `pull all`        | Fetches every branch, fast-forwards all locals, creates locals for branches pushed from another machine — never switches branches |
 | `plugup`          | Refreshes every Claude Code marketplace, then updates each installed plugin              |
-| `up`              | Brew update/upgrade/cleanup/autoremove, global npm, Claude skills, Claude plugins, lists macOS updates |
+| `nodeup`          | Installs the newest Node 24, makes it the fnm default, and carries global npm packages over from the old one |
+| `up`              | Brew update/upgrade/cleanup/autoremove, latest Node 24 patch (`nodeup`), global npm, Claude skills, Claude plugins, lists macOS updates |
 
 `pull` takes no default — a bare `pull` prints usage and exits 1 rather than guessing which of the three you meant.
 
 `plugup` exists because plugin auto-update is per-marketplace and off by default for third-party ones ([Appendix A](#appendix-a-claude-skills)). Folding it into `up` makes that setting irrelevant: every marketplace and plugin is current after an `up`, whatever the toggles say. `claude plugin update` handles one plugin per call and has no `--all`, so the function reads the installed set out of `~/.claude/plugins/installed_plugins.json` and loops. Updates land on disk; a running session picks them up on `/reload-plugins` or next launch.
+
+`nodeup` exists because fnm never updates within a major on its own — Node security releases (e.g. October 2026's 24.22.1) otherwise sit uninstalled. fnm also keeps global npm packages per version, so a fresh patch starts with none; `nodeup` reinstalls the old default's globals (minus `npm` and `corepack`) and prints the `fnm uninstall` line for the old version, leaving removal to you. `claude` is unaffected either way — it's the native install. Moving to a new major stays manual: edit the `24` in `nodeup` and in each repo's `.nvmrc`.
 
 `--greedy` is load-bearing: without it `brew upgrade` skips every `auto_updates true` cask, which is nearly all of them, and `up` reports success having upgraded no apps at all.
 
