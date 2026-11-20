@@ -4,7 +4,7 @@
 
 Start-to-finish setup for a fresh macOS machine: prep, system config, CLIs, editor, agent tooling.
 
-> **This doc lives at https://github.com/maxhirtens/mac-dev-setup** — open it there on the fresh machine.
+> **This doc lives at https://github.com/maxhirtens/maxhirtens-mac-setup** — open it there on the fresh machine.
 
 ---
 
@@ -100,7 +100,7 @@ claude
 Point it at this doc:
 
 ```
-Walk me through https://github.com/maxhirtens/mac-dev-setup
+Walk me through https://github.com/maxhirtens/maxhirtens-mac-setup
 ```
 
 Claude can run the `defaults`, Homebrew, fnm, and skills steps directly. It can't type a `sudo` password or complete a browser login — run those yourself with the `!` prefix so the output stays in the session.
@@ -226,10 +226,10 @@ The config lives in [`shell/zshrc.zsh`](shell/zshrc.zsh) in this repo, and `~/.z
 `up` pulls this repo (`--ff-only`) and re-sources the file before anything else, so every machine picks up edits to `pull`, `plugup`, and `nodeup` on its next `up`. Edits to `up` itself apply from the run after — the alias is expanded before the pull lands. It then pulls `maxhirtens-skills` the same way, since the global `AGENTS.md` and the `maxhirtens-*` skills are symlinks into that clone ([Appendix A](#appendix-a-claude-skills)) and `npx skills update` doesn't touch them. A failed pull (offline, local changes) is reported and the rest of `up` still runs. Change them by editing `shell/zshrc.zsh` and committing, never `~/.zshrc`.
 
 ```bash
-[[ -d ~/Desktop/Code/mac-dev-setup ]] \
-  || git clone https://github.com/maxhirtens/mac-dev-setup.git ~/Desktop/Code/mac-dev-setup
-grep -qs 'mac-dev-setup/shell/zshrc.zsh' ~/.zshrc \
-  || printf '\n# shell config from mac-dev-setup (step 10)\nsource ~/Desktop/Code/mac-dev-setup/shell/zshrc.zsh\n' >> ~/.zshrc
+[[ -d ~/Desktop/Code/maxhirtens-mac-setup ]] \
+  || git clone https://github.com/maxhirtens/maxhirtens-mac-setup.git ~/Desktop/Code/maxhirtens-mac-setup
+grep -qs 'maxhirtens-mac-setup/shell/zshrc.zsh' ~/.zshrc \
+  || printf '\n# shell config from maxhirtens-mac-setup (step 10)\nsource ~/Desktop/Code/maxhirtens-mac-setup/shell/zshrc.zsh\n' >> ~/.zshrc
 ```
 
 Restart the terminal (or `source ~/.zshrc`), then verify:
