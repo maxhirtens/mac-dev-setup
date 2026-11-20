@@ -280,9 +280,11 @@ Node and `gh` are both in place now — this is the point to come back and insta
 Anything with a working cask goes through brew so `up` can see it. Only apps without one are installed by hand ([step 16](#16-remaining-gui-installs)).
 
 ```bash
-brew install --cask vlc cursor zoom spotify superduper transmission \
+brew install --cask claude vlc cursor zoom spotify superduper transmission \
   inngest/tap/inngest obs whatsapp appzapper loopback
 ```
+
+`claude` is the Claude desktop app (Mac app for personal coding), not the CLI. The CLI stays on the native installer from [step 5](#5-claude-code). The app updates itself; the cask is there so `brew list --cask` covers it.
 
 `inngest` must be tap-qualified, for the same reason `stripe/stripe-cli/stripe` is in [step 8](#8-homebrew-and-clis): it lives in a third-party tap, so the bare name fails and `brew search inngest` reports nothing until the tap is added. Homebrew asks to trust the tap on first install. It's also the odd one out in this list — the Inngest CLI and dev server (`inngest dev`), not a GUI app — but Inngest ships it as a cask, so this is where brew wants it.
 
