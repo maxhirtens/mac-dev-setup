@@ -82,4 +82,4 @@ print(" ".join(p for p in json.load(sys.stdin).get("dependencies", {}) if p not 
 }
 
 # up — update everything. Pulls this repo first and re-sources it, so this run uses the latest nodeup/plugup.
-alias up='git -C ~/Desktop/Code/maxhirtens-mac-setup pull --ff-only && source ~/Desktop/Code/maxhirtens-mac-setup/shell/zshrc.zsh; git -C ~/Desktop/Code/maxhirtens-skills pull --ff-only; brew update && brew upgrade --greedy && brew cleanup && brew autoremove; nodeup; npm update -g; npx skills update -g -y; plugup; softwareupdate -l'
+alias up='git -C ~/Desktop/Code/maxhirtens-mac-setup pull --ff-only && source ~/Desktop/Code/maxhirtens-mac-setup/shell/zshrc.zsh; git -C ~/Desktop/Code/maxhirtens-skills pull --ff-only; git -C ~/Desktop/Code/maxhirtens-docs pull --ff-only; brew update && brew upgrade --greedy && brew cleanup && brew autoremove; nodeup; npm update -g; npx skills update -g -y; plugup; softwareupdate -l'

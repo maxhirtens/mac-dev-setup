@@ -223,7 +223,7 @@ Everything else that belongs in `~/.zshrc`, on top of the fnm line from [step 9]
 
 The config lives in [`shell/zshrc.zsh`](shell/zshrc.zsh) in this repo, and `~/.zshrc` just sources it — so there is one copy, not a pasted block that drifts. The clone is public, so plain `git` works before [GitHub auth](#11-github-auth). Both commands are guarded and safe to re-run.
 
-`up` pulls this repo (`--ff-only`) and re-sources the file before anything else, so every machine picks up edits to `pull`, `plugup`, and `nodeup` on its next `up`. Edits to `up` itself apply from the run after — the alias is expanded before the pull lands. It then pulls `maxhirtens-skills` the same way, since the global `AGENTS.md` and the `maxhirtens-*` skills are symlinks into that clone ([Appendix A](#appendix-a-claude-skills)) and `npx skills update` doesn't touch them. A failed pull (offline, local changes) is reported and the rest of `up` still runs. Change them by editing `shell/zshrc.zsh` and committing, never `~/.zshrc`.
+`up` pulls this repo (`--ff-only`) and re-sources the file before anything else, so every machine picks up edits to `pull`, `plugup`, and `nodeup` on its next `up`. Edits to `up` itself apply from the run after — the alias is expanded before the pull lands. It then pulls `maxhirtens-skills` the same way, since the global `AGENTS.md` and the `maxhirtens-*` skills are symlinks into that clone ([Appendix A](#appendix-a-claude-skills)) and `npx skills update` doesn't touch them, then `maxhirtens-docs`. A failed pull (offline, local changes) is reported and the rest of `up` still runs. Change them by editing `shell/zshrc.zsh` and committing, never `~/.zshrc`.
 
 ```bash
 [[ -d ~/Desktop/Code/maxhirtens-mac-setup ]] \
@@ -247,7 +247,7 @@ type pull | head -1 && type plugup | head -1 && type nodeup | head -1 && alias u
 | `pull all`        | Fetches every branch, fast-forwards all locals, creates locals for branches pushed from another machine — never switches branches |
 | `plugup`          | Refreshes every Claude Code marketplace, then updates each installed plugin              |
 | `nodeup`          | Installs the newest Node 24, makes it the fnm default, and carries global npm packages over from the old one |
-| `up`              | Pulls this repo and `maxhirtens-skills`, then brew update/upgrade/cleanup/autoremove, latest Node 24 patch (`nodeup`), global npm, Claude skills, Claude plugins, lists macOS updates |
+| `up`              | Pulls this repo, `maxhirtens-skills` and `maxhirtens-docs`, then brew update/upgrade/cleanup/autoremove, latest Node 24 patch (`nodeup`), global npm, Claude skills, Claude plugins, lists macOS updates |
 
 `pull` takes no default — a bare `pull` prints usage and exits 1 rather than guessing which of the three you meant.
 
@@ -549,6 +549,7 @@ Both come from `maxhirtens-skills`, and nothing is a copy — every target symli
 
 ```bash
 git clone https://github.com/maxhirtens/maxhirtens-skills.git ~/Desktop/Code/maxhirtens-skills
+git clone https://github.com/maxhirtens/maxhirtens-docs.git ~/Desktop/Code/maxhirtens-docs
 ```
 
 `AGENTS.md` in that repo is the canonical global instructions. Both agent locations point at it:
